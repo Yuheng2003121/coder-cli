@@ -1,6 +1,10 @@
 import express from "express";
 import cors from "cors";
+import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import dotenv from "dotenv";
+import { auth } from "./lib/auth";
+import { NotFoundError } from "./types/error";
+import { errorHandler } from "./middleware/errorHandler";
 
 dotenv.config();
 
@@ -8,8 +12,30 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(cors());
+app.all("/api/auth/{*any}", toNodeHandler(auth));
 app.use(express.json());
-console.log("123");
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL, // Replace with your frontend's origin
+    methods: ["GET", "POST", "PUT", "DELETE"], // Specify allowed HTTP methods
+    credentials: true, // Allow credentials (cookies, authorization headers, etc.)
+  }),
+);
+
+app.get("/api/me", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+  return res.json(session);
+});
+
+
+// 404 处理：所有未匹配路由
+app.use((req, res, next) => {
+  next(new NotFoundError(`Can't find ${req.originalUrl}`));
+});
+// ⚠️ 全局错误处理中间件（必须放在最后！）
+app.use(errorHandler);
 
 
 app.get("/", (req, res) => {
